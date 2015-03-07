@@ -54,11 +54,6 @@ public class App {
         SpringApplication.run(App.class, args);
     }
 
-    @RequestMapping(value = "/")
-    String hello() {
-        return "OK!日本語通ったね！";
-    }
-
     @RequestMapping(value = "/send")
     String send(@RequestParam String msg /* リクエストパラメータmsgでメッセージ本文を受け取る */) {
         Message<String> message = MessageBuilder
@@ -66,20 +61,6 @@ public class App {
                 .build(); // メッセージを作成
         jmsMessagingTemplate.send("hello", message); // 宛先helloにメッセージを送信
         return "OK"; // とりあえずOKと即時応答しておく
-    }
-
-    @JmsListener(destination = "hello", concurrency = "1-5" /* 最小1スレッド、最大5スレッドに設定 */)
-    void handleHelloMessage(Message<String> message /* 送信されたメッセージを受け取る */) {
-        log.info("received! {}", message);
-        log.info("msg={}", message.getPayload());
-    }
-
-    @RequestMapping(value = "/queue", method = RequestMethod.POST)
-    String queue(@RequestParam Part file) throws IOException {
-        byte[] src = StreamUtils.copyToByteArray(file.getInputStream()); // InputStream -> byte[]
-        Message<byte[]> message = MessageBuilder.withPayload(src).build(); // byte[]を持つMessageを作成
-        jmsMessagingTemplate.send("faceConverter", message); // convertAndSend("faceConverter", src)でも可
-        return "OK";
     }
 
     @JmsListener(destination = "faceConverter", concurrency = "1-5")
