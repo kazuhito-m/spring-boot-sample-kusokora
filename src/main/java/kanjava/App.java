@@ -2,11 +2,13 @@ package kanjava;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.PostConstruct;
@@ -17,9 +19,37 @@ import java.util.function.BiConsumer;
 import static org.bytedeco.javacpp.opencv_core.*;
 import static org.bytedeco.javacpp.opencv_objdetect.*;
 
+import org.springframework.jms.core.JmsMessagingTemplate;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.jms.annotation.JmsListener;
+
 @SpringBootApplication
 @RestController
 public class App {
+
+    private static final Logger log = LoggerFactory.getLogger(App.class); // 後で使う
+
+    @Autowired
+    FaceDetector faceDetector;
+    @Autowired
+    JmsMessagingTemplate jmsMessagingTemplate; // メッセージ操作用APIのJMSラッパー
+
+    @RequestMapping(value = "/send")
+    String send(@RequestParam String msg /* リクエストパラメータmsgでメッセージ本文を受け取る */) {
+        Message<String> message = MessageBuilder
+                .withPayload(msg)
+                .build(); // メッセージを作成
+        jmsMessagingTemplate.send("hello", message); // 宛先helloにメッセージを送信
+        return "OK"; // とりあえずOKと即時応答しておく
+    }
+
+    @JmsListener(destination = "hello", concurrency = "1-5" /* 最小1スレッド、最大5スレッドに設定 */)
+    void handleHelloMessage(Message<String> message /* 送信されたメッセージを受け取る */) {
+        log.info("received! {}", message);
+        log.info("msg={}", message.getPayload());
+    }
+
     public static void main(String[] args) {
         SpringApplication.run(App.class, args);
     }
