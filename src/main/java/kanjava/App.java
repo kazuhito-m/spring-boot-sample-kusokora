@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Scope;
+import org.springframework.context.annotation.ScopedProxyMode;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.jms.core.JmsMessagingTemplate;
 import org.springframework.messaging.Message;
@@ -88,6 +90,7 @@ public class App {
 }
 
 @Component // コンポーネントスキャン対象にする。@Serviceでも@NamedでもOK
+@Scope(value = "prototype", proxyMode = ScopedProxyMode.TARGET_CLASS)
 class FaceDetector {
     // 分類器のパスをプロパティから取得できるようにする
     @Value("${classifierFile:classpath:/haarcascade_frontalface_default.xml}")
