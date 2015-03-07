@@ -6,11 +6,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import org.springframework.context.annotation.ScopedProxyMode;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.jms.core.JmsMessagingTemplate;
 import org.springframework.messaging.Message;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.SendTo;
+import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StreamUtils;
@@ -18,6 +22,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.socket.config.annotation.AbstractWebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
+import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 
 import javax.annotation.PostConstruct;
 import javax.imageio.ImageIO;
@@ -27,6 +34,8 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+
+import java.util.function.BiConsumer;
 
 import static org.bytedeco.javacpp.opencv_core.*;
 import static org.bytedeco.javacpp.opencv_objdetect.CascadeClassifier;
@@ -43,6 +52,11 @@ public class App {
 
     public static void main(String[] args) {
         SpringApplication.run(App.class, args);
+    }
+
+    @RequestMapping(value = "/")
+    String hello() {
+        return "OK!日本語通ったね！";
     }
 
     @RequestMapping(value = "/send")
@@ -79,11 +93,28 @@ public class App {
         }
     }
 
-    @RequestMapping(value = "/")
-    String hello() {
-        return "OK!日本語通ったね！";
+    @Configuration
+    @EnableWebSocketMessageBroker // WebSocketに関する設定クラス
+    static class StompConfig extends AbstractWebSocketMessageBrokerConfigurer {
+
+        @Override
+        public void registerStompEndpoints(StompEndpointRegistry registry) {
+            registry.addEndpoint("endpoint"); // WebSocketのエンドポイント
+        }
+
+        @Override
+        public void configureMessageBroker(MessageBrokerRegistry registry) {
+            registry.setApplicationDestinationPrefixes("/app"); // Controllerに処理させる宛先のPrefix
+            registry.enableSimpleBroker("/topic"); // queueまたはtopicを有効にする(両方可)。queueは1対1(P2P)、topicは1対多(Pub-Sub)
+        }
     }
 
+    @MessageMapping(value = "/greet" /* 宛先名 */) // Controller内の@MessageMappingアノテーションをつけたメソッドが、メッセージを受け付ける
+    @SendTo(value = "/topic/greetings") // 処理結果の送り先
+    String greet(String name) {
+        log.info("received {}", name);
+        return "Hello " + name;
+    }
 }
 
 @Component // コンポーネントスキャン対象にする。@Serviceでも@NamedでもOK
