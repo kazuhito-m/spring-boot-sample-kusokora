@@ -14,31 +14,29 @@ import org.springframework.jms.core.JmsMessagingTemplate;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.socket.config.annotation.AbstractWebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 
 import javax.annotation.PostConstruct;
 import javax.imageio.ImageIO;
-import javax.servlet.http.Part;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-
-import java.util.function.BiConsumer;
+import java.io.*;
 
 import static org.bytedeco.javacpp.opencv_core.*;
 import static org.bytedeco.javacpp.opencv_objdetect.CascadeClassifier;
+
+import java.util.function.BiConsumer;
+import java.util.Base64;
+
 
 @SpringBootApplication
 @RestController
@@ -49,6 +47,9 @@ public class App {
     FaceDetector faceDetector;
     @Autowired
     JmsMessagingTemplate jmsMessagingTemplate; // メッセージ操作用APIのJMSラッパー
+
+    @Autowired
+    SimpMessagingTemplate simpMessagingTemplate;
 
     public static void main(String[] args) {
         SpringApplication.run(App.class, args);
@@ -70,7 +71,14 @@ public class App {
             Mat source = Mat.createFrom(ImageIO.read(stream)); // InputStream -> BufferedImage -> Mat
             faceDetector.detectFaces(source, FaceTranslator::duker);
             BufferedImage image = source.getBufferedImage();
-            // do nothing...
+
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) { // BufferedImageをbyte[]に変換
+                ImageIO.write(image, "png", baos);
+                baos.flush();
+                // 画像をBase64にエンコードしてメッセージ作成し、宛先'/topic/faces'へメッセージ送信
+                simpMessagingTemplate.convertAndSend("/topic/faces",
+                        Base64.getEncoder().encodeToString(baos.toByteArray()));
+            }
         }
     }
 
@@ -88,6 +96,12 @@ public class App {
             registry.setApplicationDestinationPrefixes("/app"); // Controllerに処理させる宛先のPrefix
             registry.enableSimpleBroker("/topic"); // queueまたはtopicを有効にする(両方可)。queueは1対1(P2P)、topicは1対多(Pub-Sub)
         }
+
+        @Override
+        public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
+            registration.setMessageSizeLimit(10 * 1024 * 1024); // メッセージサイズの上限を10MBに上げる(デフォルトは64KB)
+        }
+
     }
 
     @MessageMapping(value = "/greet" /* 宛先名 */) // Controller内の@MessageMappingアノテーションをつけたメソッドが、メッセージを受け付ける
