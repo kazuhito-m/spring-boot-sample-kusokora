@@ -13,6 +13,7 @@ import org.springframework.jms.core.JmsMessagingTemplate;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,23 +27,23 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.function.BiConsumer;
 
 import static org.bytedeco.javacpp.opencv_core.*;
-import static org.bytedeco.javacpp.opencv_objdetect.*;
-
-import org.springframework.util.StreamUtils;
+import static org.bytedeco.javacpp.opencv_objdetect.CascadeClassifier;
 
 @SpringBootApplication
 @RestController
 public class App {
 
     private static final Logger log = LoggerFactory.getLogger(App.class); // 後で使う
-
     @Autowired
     FaceDetector faceDetector;
     @Autowired
     JmsMessagingTemplate jmsMessagingTemplate; // メッセージ操作用APIのJMSラッパー
+
+    public static void main(String[] args) {
+        SpringApplication.run(App.class, args);
+    }
 
     @RequestMapping(value = "/send")
     String send(@RequestParam String msg /* リクエストパラメータmsgでメッセージ本文を受け取る */) {
@@ -78,10 +79,6 @@ public class App {
         }
     }
 
-    public static void main(String[] args) {
-        SpringApplication.run(App.class, args);
-    }
-
     @RequestMapping(value = "/")
     String hello() {
         return "OK!日本語通ったね！";
@@ -92,13 +89,11 @@ public class App {
 @Component // コンポーネントスキャン対象にする。@Serviceでも@NamedでもOK
 @Scope(value = "prototype", proxyMode = ScopedProxyMode.TARGET_CLASS)
 class FaceDetector {
+    static final Logger log = LoggerFactory.getLogger(FaceDetector.class);
     // 分類器のパスをプロパティから取得できるようにする
     @Value("${classifierFile:classpath:/haarcascade_frontalface_default.xml}")
     File classifierFile;
-
     CascadeClassifier classifier;
-
-    static final Logger log = LoggerFactory.getLogger(FaceDetector.class);
 
     public void detectFaces(Mat source, BiConsumer<Mat, Rect> detectAction) {
         // 顔認識結果
